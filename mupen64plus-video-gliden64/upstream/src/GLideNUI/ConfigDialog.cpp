@@ -105,6 +105,8 @@ QString ConfigDialog::_hotkeyDescription(quint32 _idx) const
 		return tr("Toggle force gamma correction");
 	case Config::HotKey::hkInaccurateTexCords:
 		return tr("Toggle inaccurate texture coordinates");
+	case Config::HotKey::hkStrongCRC:
+		return tr("Toggle strong CRC for textures dump");
 	}
 	return tr("Unknown hotkey");
 }
@@ -127,9 +129,9 @@ void ConfigDialog::_init(bool reInit, bool blockCustomSettings)
 	m_blockReInit = true;
 
 	if (reInit && m_romName != nullptr && ui->customSettingsCheckBox->isChecked() && ui->settingsDestGameRadioButton->isChecked()) {
-		loadCustomRomSettings(m_strIniPath, m_romName);
+		loadCustomRomSettings(m_strIniPath, m_strSharedIniPath, m_romName);
 	} else if (reInit) {
-		loadSettings(m_strIniPath);
+		loadSettings(m_strIniPath, m_strSharedIniPath);
 	}
 
 	// Video settings
@@ -195,8 +197,13 @@ void ConfigDialog::_init(bool reInit, bool blockCustomSettings)
 	ui->overscanPalBottomSpinBox->setValue(config.frameBufferEmulation.overscanPAL.bottom);
 
 	QStringList fullscreenModesList, fullscreenRatesList;
-	int fullscreenMode, fullscreenRate;
+	int fullscreenMode = 0, fullscreenRate = 0;
 	fillFullscreenResolutionsList(fullscreenModesList, fullscreenMode, fullscreenRatesList, fullscreenRate);
+#ifdef M64P_GLIDENUI
+	if (fullscreenModesList.isEmpty() && fullscreenRatesList.isEmpty()) {
+		ui->fullScreenResolutionFrame->setVisible(false);
+	}
+#endif
 	ui->fullScreenResolutionComboBox->clear();
 	ui->fullScreenResolutionComboBox->insertItems(0, fullscreenModesList);
 	ui->fullScreenResolutionComboBox->setCurrentIndex(fullscreenMode);
@@ -325,8 +332,11 @@ void ConfigDialog::_init(bool reInit, bool blockCustomSettings)
 	case Config::a169:
 		ui->aspectComboBox->setCurrentIndex(1);
 		break;
-	case Config::aAdjust:
+	case Config::aAdjust43:
 		ui->aspectComboBox->setCurrentIndex(3);
+		break;
+	case Config::aAdjust169:
+		ui->aspectComboBox->setCurrentIndex(4);
 		break;
 	}
 
@@ -365,6 +375,7 @@ void ConfigDialog::_init(bool reInit, bool blockCustomSettings)
 	ui->texturePackGroupBox->setChecked(config.textureFilter.txHiresEnable != 0);
 	ui->alphaChannelCheckBox->setChecked(config.textureFilter.txHiresFullAlphaChannel != 0);
 	ui->alternativeCRCCheckBox->setChecked(config.textureFilter.txHresAltCRC != 0);
+	ui->strongCRCCheckBox->setChecked(config.textureFilter.txStrongCRC != 0);
 	ui->force16bppCheckBox->setChecked(config.textureFilter.txForce16bpp != 0);
 	ui->compressCacheCheckBox->setChecked(config.textureFilter.txCacheCompression != 0);
 	ui->saveTextureCacheCheckBox->setChecked(config.textureFilter.txSaveCache != 0);
@@ -372,9 +383,9 @@ void ConfigDialog::_init(bool reInit, bool blockCustomSettings)
 	ui->hiresTexFileStorageCheckBox->setChecked(config.textureFilter.txHiresTextureFileStorage != 0);
 	ui->noTexFileStorageCheckBox->setChecked(config.textureFilter.txNoTextureFileStorage != 0);
 
-	ui->texPackPathLineEdit->setText(QString::fromWCharArray(config.textureFilter.txPath));
-	ui->texCachePathLineEdit->setText(QString::fromWCharArray(config.textureFilter.txCachePath));
-	ui->texDumpPathLineEdit->setText(QString::fromWCharArray(config.textureFilter.txDumpPath));
+	ui->texPackPathLineEdit->setText(QDir::toNativeSeparators(QString::fromWCharArray(config.textureFilter.txPath)));
+	ui->texCachePathLineEdit->setText(QDir::toNativeSeparators(QString::fromWCharArray(config.textureFilter.txCachePath)));
+	ui->texDumpPathLineEdit->setText(QDir::toNativeSeparators(QString::fromWCharArray(config.textureFilter.txDumpPath)));
 
 	ui->textureFilterLimitSpinBox->setValue(config.textureFilter.txHiresVramLimit);
 
@@ -475,17 +486,27 @@ void ConfigDialog::_init(bool reInit, bool blockCustomSettings)
 
 void ConfigDialog::_getTranslations(QStringList & _translationFiles) const
 {
-	QDir pluginFolder(m_strIniPath);
+	QDir pluginFolder(m_strSharedIniPath);
 	QStringList nameFilters("gliden64_*.qm");
 	_translationFiles = pluginFolder.entryList(nameFilters, QDir::Files, QDir::Name);
 }
 
-void ConfigDialog::setIniPath(const QString & _strIniPath)
+void ConfigDialog::setIniPath(const QString & _strIniPath, const QString & _strSharedIniPath)
 {
 	m_strIniPath = _strIniPath;
+	m_strSharedIniPath = _strSharedIniPath;
 
 	QStringList translationFiles;
 	_getTranslations(translationFiles);
+
+#ifdef M64P_GLIDENUI
+	if (translationFiles.empty())
+	{
+		ui->userInterfaceGroupBox->hide();
+		QSpacerItem* verticalSpacer = new QSpacerItem(20, 0, QSizePolicy::Minimum, QSizePolicy::Expanding);
+		ui->verticalLayout_4->addItem(verticalSpacer);
+	}
+#endif
 
 	const QString currentTranslation = getTranslationFile();
 	int listIndex = 0;
@@ -643,7 +664,9 @@ void ConfigDialog::accept(bool justSave) {
 	else if (ui->aspectComboBox->currentIndex() == 1)
 		config.frameBufferEmulation.aspect = Config::a169;
 	else if (ui->aspectComboBox->currentIndex() == 3)
-		config.frameBufferEmulation.aspect = Config::aAdjust;
+		config.frameBufferEmulation.aspect = Config::aAdjust43;
+	else if (ui->aspectComboBox->currentIndex() == 4)
+		config.frameBufferEmulation.aspect = Config::aAdjust169;
 
 	if (ui->factor0xRadioButton->isChecked())
 		config.frameBufferEmulation.nativeResFactor = 0;
@@ -678,6 +701,7 @@ void ConfigDialog::accept(bool justSave) {
 	config.textureFilter.txHiresEnable = ui->texturePackGroupBox->isChecked() ? 1 : 0;
 	config.textureFilter.txHiresFullAlphaChannel = ui->alphaChannelCheckBox->isChecked() ? 1 : 0;
 	config.textureFilter.txHresAltCRC = ui->alternativeCRCCheckBox->isChecked() ? 1 : 0;
+	config.textureFilter.txStrongCRC = ui->strongCRCCheckBox->isChecked() ? 1 : 0;
 
 	config.textureFilter.txCacheCompression = ui->compressCacheCheckBox->isChecked() ? 1 : 0;
 	config.textureFilter.txForce16bpp = ui->force16bppCheckBox->isChecked() ? 1 : 0;
@@ -793,7 +817,7 @@ void ConfigDialog::accept(bool justSave) {
 		config.debug.dumpMode |= DEBUG_DETAIL;
 
 	if (config.generalEmulation.enableCustomSettings && ui->settingsDestGameRadioButton->isChecked() && m_romName != nullptr)
-		saveCustomRomSettings(m_strIniPath, m_romName);
+		saveCustomRomSettings(m_strIniPath, m_strSharedIniPath, m_romName);
 	else
 		writeSettings(m_strIniPath);
 
@@ -836,8 +860,8 @@ void ConfigDialog::on_buttonBox_clicked(QAbstractButton *button)
 			QMessageBox::RestoreDefaults | QMessageBox::Cancel, this
 			);
 		msgBox.setDefaultButton(QMessageBox::Cancel);
-		msgBox.setButtonText(QMessageBox::RestoreDefaults, tr("Restore Defaults"));
-		msgBox.setButtonText(QMessageBox::Cancel, tr("Cancel"));
+		msgBox.button(QMessageBox::RestoreDefaults)->setText(tr("Restore Defaults"));
+		msgBox.button(QMessageBox::Cancel)->setText(tr("Cancel"));
 		if (msgBox.exec() == QMessageBox::RestoreDefaults) {
 			const u32 enableCustomSettings = config.generalEmulation.enableCustomSettings;
 			resetSettings(m_strIniPath);
@@ -871,7 +895,7 @@ void ConfigDialog::on_texPackPathButton_clicked()
 		ui->texPackPathLineEdit->text(),
 		options);
 	if (!directory.isEmpty())
-		ui->texPackPathLineEdit->setText(directory);
+		ui->texPackPathLineEdit->setText(QDir::toNativeSeparators(directory));
 }
 
 void ConfigDialog::on_texCachePathButton_clicked()
@@ -882,7 +906,7 @@ void ConfigDialog::on_texCachePathButton_clicked()
 		ui->texCachePathLineEdit->text(),
 		options);
 	if (!directory.isEmpty())
-		ui->texCachePathLineEdit->setText(directory);
+		ui->texCachePathLineEdit->setText(QDir::toNativeSeparators(directory));
 }
 
 void ConfigDialog::on_texDumpPathButton_clicked()
@@ -893,7 +917,7 @@ void ConfigDialog::on_texDumpPathButton_clicked()
 		ui->texDumpPathLineEdit->text(),
 		options);
 	if (!directory.isEmpty())
-		ui->texDumpPathLineEdit->setText(directory);
+		ui->texDumpPathLineEdit->setText(QDir::toNativeSeparators(directory));
 }
 
 void ConfigDialog::on_noTexFileStorageCheckBox_toggled(bool checked)
@@ -1010,15 +1034,20 @@ void ConfigDialog::on_tabWidget_currentChanged(int tab)
 		ui->tabWidget->setCursor(QCursor(Qt::WaitCursor));
 
 		QMap<QString, QStringList> internalFontList;
-		QString fontDir = QStandardPaths::locate(QStandardPaths::FontsLocation, QString(), QStandardPaths::LocateDirectory);
 		QStringList fontFilter;
 		fontFilter << "*.ttf";
-		QDirIterator fontIt(fontDir, fontFilter, QDir::Files, QDirIterator::Subdirectories);
-		while (fontIt.hasNext()) {
-			QString font = fontIt.next();
-			int id = QFontDatabase::addApplicationFont(font);
-			QString fontListFamily = QFontDatabase::applicationFontFamilies(id).at(0);
-			internalFontList[fontListFamily].append(font);
+		QStringList fontDirs = QStandardPaths::locateAll(QStandardPaths::FontsLocation, QString(), QStandardPaths::LocateDirectory);
+		for (const QString& fontDir : fontDirs) {
+			QDirIterator fontIt(fontDir, fontFilter, QDir::Files, QDirIterator::Subdirectories);
+			while (fontIt.hasNext()) {
+				QString font = fontIt.next();
+				int id = QFontDatabase::addApplicationFont(font);
+				QStringList fontListFamilies = QFontDatabase::applicationFontFamilies(id);
+				if (!fontListFamilies.isEmpty()) {
+					QString fontListFamily = fontListFamilies.at(0);
+					internalFontList[fontListFamily].append(font);
+				}
+			}
 		}
 
 		QMap<QString, QStringList>::const_iterator i;
@@ -1056,7 +1085,7 @@ void ConfigDialog::setTitle()
 	setWindowTitle(tr("GLideN64 Settings"));
 }
 
-void ConfigDialog::on_profilesComboBox_currentIndexChanged(const QString &profile)
+void ConfigDialog::on_profilesComboBox_currentTextChanged(const QString &profile)
 {
 	ui->settingsDestProfileRadioButton->setChecked(true);
 	if (profile == tr("New...")) {
@@ -1103,7 +1132,7 @@ void ConfigDialog::on_profilesComboBox_currentIndexChanged(const QString &profil
 		}
 		return;
 	}
-	changeProfile(m_strIniPath, profile);
+	changeProfile(m_strIniPath, m_strSharedIniPath, profile);
 	_init(true);
 }
 
@@ -1125,13 +1154,13 @@ void ConfigDialog::on_removeProfilePushButton_clicked()
 	QMessageBox msgBox(QMessageBox::Warning, tr("Remove Profile"),
 		msg, QMessageBox::Yes | QMessageBox::Cancel, this);
 	msgBox.setDefaultButton(QMessageBox::Cancel);
-	msgBox.setButtonText(QMessageBox::Yes, tr("Remove"));
-	msgBox.setButtonText(QMessageBox::No, tr("Cancel"));
+	msgBox.button(QMessageBox::Yes)->setText(tr("Remove"));
+	msgBox.button(QMessageBox::Cancel)->setText(tr("Cancel"));
 	if (msgBox.exec() == QMessageBox::Yes) {
 		removeProfile(m_strIniPath, profile);
 		ui->profilesComboBox->blockSignals(true);
 		ui->profilesComboBox->removeItem(ui->profilesComboBox->currentIndex());
-		changeProfile(m_strIniPath, ui->profilesComboBox->itemText(ui->profilesComboBox->currentIndex()));
+		changeProfile(m_strIniPath, m_strSharedIniPath, ui->profilesComboBox->itemText(ui->profilesComboBox->currentIndex()));
 		ui->profilesComboBox->blockSignals(false);
 		_init(true);
 		ui->removeProfilePushButton->setDisabled(ui->profilesComboBox->count() == 3);
