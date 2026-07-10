@@ -48,7 +48,7 @@ jobs:
 
     - name: Declare branch name
       id: branch-name
-      uses: tj-actions/branch-names@v8
+      uses: tj-actions/branch-names@v9.0.2
 
     - name: Get branch name
       id: var
@@ -93,7 +93,7 @@ jobs:
 
     - name: Declare branch name
       id: branch-name
-      uses: tj-actions/branch-names@v8
+      uses: tj-actions/branch-names@v9.0.2
 
     - name: Get branch name
       id: var
@@ -123,7 +123,7 @@ jobs:
         git push -f origin Pre-release
 
     - name: Create Release
-      uses: ncipollo/release-action@v1
+      uses: ncipollo/release-action@v1.21.0
       with:
         prerelease: true
         allowUpdates: true
