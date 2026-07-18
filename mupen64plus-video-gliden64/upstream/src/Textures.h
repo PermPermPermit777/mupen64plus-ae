@@ -90,7 +90,7 @@ private:
 	CachedTexture * _addTexture(u64 _crc64);
 	void _loadFast(u32 _tile, CachedTexture *_pTexture);
 	void _loadAccurate(u32 _tile, CachedTexture *_pTexture);
-	bool _loadHiresTexture(u32 _tile, CachedTexture *_pTexture, u64 & _ricecrc);
+	bool _loadHiresTexture(u32 _tile, CachedTexture *_pTexture, u64 & _ricecrc, u64 & _strongcrc);
 	void _loadBackground(CachedTexture *pTexture);
 	bool _loadHiresBackground(CachedTexture *_pTexture, u64 & _ricecrc);
 	void _loadDepthTexture(CachedTexture * _pTexture, u16* _pDest);
@@ -130,26 +130,4 @@ inline TextureCache & textureCache()
 	return TextureCache::get();
 }
 
-inline u32 pow2( u32 dim )
-{
-	u32 i = 1;
-
-	while (i < dim) i <<= 1;
-
-	return i;
-}
-
-inline u32 powof( u32 dim )
-{
-	u32 num = 1;
-	u32 i = 0;
-
-	while (num < dim)
-	{
-		num <<= 1;
-		i++;
-	}
-
-	return i;
-}
 #endif
