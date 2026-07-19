@@ -1,6 +1,6 @@
 #include "RSP.h"
 #include "N64.h"
-#include "arm_neon.h"
+#include <arm_neon.h>
 #include "GBI.h"
 
 void RSP_LoadMatrix( f32 mtx[4][4], u32 address )
