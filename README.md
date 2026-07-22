@@ -22,6 +22,13 @@ Please visit [the official forum](http://www.paulscode.com/forum/index.php) for 
 [Download]: https://img.shields.io/badge/Download-blue
 [mupen64plus-ae]: https://github.com/mupen64plus-ae/mupen64plus-ae/releases/download/Pre-release/mupen64plus-ae-master.zip
 
+## Things I have to do in this app
+
+1. Updated GLiden64 (✓)
+2. Updated HLE (progress.....)
+3. rename Version to something new one
+
+
 ## Build Instructions
 
 1. Download and install the prerequisites
