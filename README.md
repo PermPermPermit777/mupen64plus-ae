@@ -25,9 +25,7 @@ Please visit [the official forum](http://www.paulscode.com/forum/index.php) for 
 ## Things I have to do in this app
 
 1. Updated GLiden64 (✓)
-2. Updated HLE (progress.....)
-3. rename Version to something new one
-
+2. Updated HLE (✓)
 
 ## Build Instructions
 
